@@ -8,7 +8,7 @@ class Core:
         self.EMBEDDING_MODEL = EMBEDDING_MODEL
         self.LANGUAGE_MODEL = LANGUAGE_MODEL
         self.VECTOR_DB = list()
-        self.history = False
+        self.history = True
         self.chat = []
         self.VECTOR_DICT = dict()
 
@@ -34,15 +34,18 @@ class Core:
     def generate(self, input_query):
         retrieved_knowledge = self.retrieve(input_query)
         instruction_prompt = '''You are a helpful chatbot.
-        Use only the following pieces of context to answer the question. Don't make up any new information. However if you need to acquire some information from your own knowledge base, make sure to explicitly and clearly mention that it is the case: \n
+        Use only the following pieces of context to answer the question. Don't make up any new information: \n
         ''' + ('\n'.join([f' - {chunk}' for chunk, similarity in retrieved_knowledge]))
         # print('\n'.join([f' - {chunk}' for chunk, similarity in retrieved_knowledge]))
         # print(instruction_prompt)
-        
-        msgs = [
-            {'role': 'system', 'content': instruction_prompt},
-            {'role': 'user', 'content': input_query},
-          ]
+        if self.history:
+            msgs = self.chat
+            msgs.extend([ {'role': 'system', 'content': instruction_prompt}, {'role': 'user', 'content': input_query}, ])
+        else:
+            msgs = [
+                {'role': 'system', 'content': instruction_prompt},
+                {'role': 'user', 'content': input_query},
+              ]
         if self.history:
             msgs.extend(self.chat)
         stream = ollama.chat(
@@ -50,10 +53,12 @@ class Core:
           messages=msgs,
           stream=True,
         )
+        # print(msgs)
         output = ""
         for chunk in stream:
             output += chunk['message']['content']
         if self.history:
+            self.chat.append({'role': 'user', 'content': input_query})
             self.chat.append({'role': 'assistant', 'content': output})
         return output
     
