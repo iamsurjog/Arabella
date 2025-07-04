@@ -19,6 +19,7 @@ def extract_urls(html, base_url, domain):
     
     # Filter for domain
     filtered = {u for u in urls if domain in urlparse(u).netloc and "jpg" not in u}
+    print(filtered)
     return filtered
 
 
@@ -53,6 +54,7 @@ def fetch_html_css_js(url, domain, visited=None):
     for style in soup.find_all('style'):
         styles += f"<style>{style.string if style.string else ''}</style>"
     
+
     # Extract JS from <script> tags
     scripts = ''
     for script in soup.find_all('script'):
@@ -78,6 +80,9 @@ def fetch_html_css_js(url, domain, visited=None):
     
     visited[url] = combined
     print(f"{url} visited")
+    f = open("sites.dat", "wb")
+    pickle.dump(visited, f)
+    f.close()
     # print(combined)
     # Recursively process links with the specified domain
     found_urls = extract_urls(html, url, domain)
@@ -110,16 +115,16 @@ def clean_website_content(scraped_data):
     return cleaned_data
 
 
-scraped_sites = fetch_html_css_js('https://www.mosdac.gov.in/', 'mosdac.gov.in/')
+scraped_sites = fetch_html_css_js('https://www.mosdac.gov.in/', 'mosdac.gov.in')
 
 f = open("sites.dat", "wb")
-pickle.dump(scraped_sites)
+pickle.dump(scraped_sites, f)
 f.close()
 
 cleaned_output = clean_website_content(scraped_sites)
 
 f = open("sites_cleaned.dat", "wb")
-pickle.dump(cleaned_output)
+pickle.dump(cleaned_output, f)
 f.close()
 
 
