@@ -110,7 +110,7 @@ def clean_website_content(scraped_data):
     return cleaned_data
 
 
-scraped_sites = fetch_html_css_js('https://bday-jctt.onrender.com//p1', 'bday-jctt.onrender.com')
+scraped_sites = fetch_html_css_js('https://www.mosdac.gov.in/', 'mosdac.gov.in/')
 
 f = open("sites.dat", "wb")
 pickle.dump(scraped_sites)
