@@ -1,12 +1,21 @@
 # Arabella
 ## Installation
 To download the repo run
+### Windows
 ```bash
- git clone https://github.com/iamsurjog/Arabella.git
- py -m venv ./.venv
- pip install -r requirements.txt
+git clone https://github.com/iamsurjog/Arabella.git
+py -m venv ./.venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
+### Linux
+```bash
+git clone https://github.com/iamsurjog/Arabella.git
+py -m venv ./.venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 ## Running it
 ### Windows
 ```bash
@@ -18,3 +27,4 @@ fastapi run main.py
 ```bash
 source .venv/bin/activate
 fastapi run main.py
+```
