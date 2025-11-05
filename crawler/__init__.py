@@ -1,3 +1,7 @@
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
@@ -49,7 +53,7 @@ def crawl(url, max_depth=2):
 
 # Usage example:
 if __name__ == "__main__":
-    seed_url = "https://example.com"
+    seed_url = "https://gradevitian.in/GPACalculator"
     data = crawl(seed_url, max_depth=2)
     # Each item is {'url': ..., 'text': ...}
     for item in data:
