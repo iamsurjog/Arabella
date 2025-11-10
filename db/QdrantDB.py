@@ -1,7 +1,12 @@
+import os
+import logging
+from typing import List, Optional, Dict, Any
+
+import numpy as np
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
-import numpy as np
-from typing import List, Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 class QdrantDB:
     def __init__(
@@ -10,10 +15,40 @@ class QdrantDB:
         collection_name: str = "nodes",
         vector_size: int = 768
     ):
-        self.client = QdrantClient(path=path)
         self.collection = collection_name
         self.vector_size = vector_size
-        
+        self._remote = False
+
+        # Try to open a local (file-backed) Qdrant instance first.
+        try:
+            self.client = QdrantClient(path=path)
+        except Exception as e:
+            msg = str(e)
+            # Detect the typical storage-lock message and attempt to fall back
+            # to a Qdrant server if available.
+            if "already accessed" in msg or "already used" in msg or "Storage folder" in msg:
+                fallback_url = os.environ.get("QDRANT_URL", "http://127.0.0.1:6333")
+                logger.warning(
+                    "Local Qdrant storage at '%s' appears locked. Falling back to Qdrant server at %s.\n" \
+                    "Original error: %s",
+                    path,
+                    fallback_url,
+                    msg,
+                )
+                try:
+                    self.client = QdrantClient(url=fallback_url)
+                    self._remote = True
+                except Exception as e2:
+                    # Re-raise an informative error including both exceptions.
+                    raise RuntimeError(
+                        f"Failed to open local Qdrant storage ({msg}) and also failed to connect to Qdrant server at {fallback_url}: {e2}.\n"
+                        "If you need concurrent local access, run a Qdrant server and set QDRANT_URL, or stop the other process using the folder."
+                    )
+            else:
+                # Unknown error, surface it.
+                raise
+
+        # Ensure collection exists
         if not self.client.collection_exists(self.collection):
             self.client.create_collection(
                 collection_name=self.collection,

@@ -1,14 +1,34 @@
 import re
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+import ssl
 
 class QueryBridge:
     def __init__(self):
         import nltk
-        nltk.download('stopwords', quiet=True)
-        nltk.download('punkt', quiet=True)
+        
+        # Handle SSL certificate issues
+        try:
+            _create_unverified_https_context = ssl._create_unverified_context
+        except AttributeError:
+            pass
+        else:
+            ssl._create_default_https_context = _create_unverified_https_context
+        
+        # Download NLTK data with error handling
+        try:
+            nltk.download('stopwords', quiet=True)
+            nltk.download('punkt', quiet=True)
+            nltk.download('punkt_tab', quiet=True)
+        except Exception as e:
+            print(f"Warning: NLTK download error (will use defaults): {e}")
 
-        self.stopwords = set(stopwords.words('english'))
+        try:
+            self.stopwords = set(stopwords.words('english'))
+        except Exception as e:
+            print(f"Warning: Could not load stopwords, using defaults: {e}")
+            self.stopwords = set()
+            
         self.stopwords.update([
             'how', 'what', 'why', 'when', 'where', 'which',
             'who', 'is', 'are', 'am', 'be', 'do', 'does', 'can', 'will',

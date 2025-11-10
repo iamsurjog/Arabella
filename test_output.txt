@@ -1,0 +1,9 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.7, pytest-9.0.0, pluggy-1.6.0 -- /home/hydenix/repos/Arabella/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/hydenix/repos/Arabella
+configfile: pytest.ini
+plugins: anyio-4.11.0
+collecting ... collected 1 item
+
+tests/test_e2e_wikipedia.py::TestWikipediaE2E::test_wikipedia_python_search 
