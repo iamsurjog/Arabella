@@ -112,6 +112,17 @@ class KuzuDB:
             print(f"Get neighbors error: {e}")
             return []
 
+    def get_session_edges(self, session_id: str) -> List[str]:
+        """Get all nodes in a session"""
+        try:
+            session_safe = self._escape(session_id)
+            query = f"MATCH (n:hyprlink {{session_id:'{session_safe}'}}) RETURN n.*"
+            results = self.show(query)
+            return [r[0] if isinstance(r, (list, tuple)) else r.get('n.*', '') for r in results]
+        except Exception as e:
+            print(f"Get session nodes error: {e}")
+            return []
+
     def get_session_nodes(self, session_id: str) -> List[str]:
         """Get all nodes in a session"""
         try:

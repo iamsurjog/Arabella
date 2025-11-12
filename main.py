@@ -18,7 +18,7 @@ rag = GraphRAG(
     embedding_model=os.getenv('EMBEDDING_MODEL', 'nomic-embed-text:v1.5'),
     language_model=os.getenv('LANGUAGE_MODEL', 'llama3.2:3b'),
     vector_size=int(os.getenv('VECTOR_SIZE', '768')),
-    kuzu_db_path=os.getenv('KUZU_DB_PATH', './kuzu_db'),
+    kuzu_db_path=os.getenv('KUZU_DB_PATH', './kuzu_db'),kuzu
     qdrant_path=os.getenv('VECTOR_DB_PATH', './vector_db'),
     ollama_host=os.getenv('OLLAMA_HOST', 'http://127.0.0.1:11434')
 )
@@ -91,9 +91,11 @@ async def graph(graph: Graph):
     """Get graph information for a session"""
     try:
         nodes = rag.graph_db.get_session_nodes(graph.session_id)
+        edges = rag.graph_db.get_session_edges(graph.session_id)
         return {
             "session_id": graph.session_id,
             "nodes": nodes,
+            "edges": edges,
             "node_count": len(nodes)
         }
     except Exception as e:
