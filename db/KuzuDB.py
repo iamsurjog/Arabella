@@ -1,8 +1,16 @@
-import kuzu
+try:
+    import kuzu
+except Exception as _e:
+    kuzu = None
+    # Defer raising until someone tries to instantiate KuzuDB so the module can be imported
+    # in environments where kuzu isn't available (for tooling, tests, or Docker build steps).
 from typing import List, Optional, Dict, Any
 
 class KuzuDB:
     def __init__(self, db_path: str):
+        if kuzu is None:
+            raise ImportError("kuzu package is required to use KuzuDB. Install it in your environment.")
+
         self.db = kuzu.Database(db_path)
         self.conn = kuzu.Connection(self.db)
         self._init_schema()
@@ -10,24 +18,37 @@ class KuzuDB:
     def _init_schema(self):
         """Initialize graph schema if not exists"""
         try:
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS links (
-                    link STRING PRIMARY KEY,
-                    session_id STRING,
-                    title STRING,
-                    summary STRING,
-                    embedding_id STRING
-                )
-            """)
+            # Check if tables already exist
+            result = self.conn.execute("CALL SHOW_TABLES() RETURN *")
+            existing_tables = [row[0] for row in result]
             
-            self.conn.execute("""
-                CREATE REL TABLE IF NOT EXISTS hyprlink (
-                    FROM links TO links,
-                    session_id STRING
-                )
-            """)
+            # Create NODE table for links if it doesn't exist
+            if 'links' not in existing_tables:
+                self.conn.execute("""
+                    CREATE NODE TABLE links(
+                        link STRING,
+                        session_id STRING,
+                        title STRING,
+                        summary STRING,
+                        embedding_id STRING,
+                        PRIMARY KEY (link)
+                    )
+                """)
+                print("Created 'links' node table")
+            
+            # Create REL table for hyperlinks if it doesn't exist
+            if 'hyprlink' not in existing_tables:
+                self.conn.execute("""
+                    CREATE REL TABLE hyprlink(
+                        FROM links TO links,
+                        session_id STRING
+                    )
+                """)
+                print("Created 'hyprlink' relationship table")
         except Exception as e:
-            print(f"Schema init info: {e}")
+            # Only print error if it's not about tables already existing
+            if "already exists" not in str(e):
+                print(f"Schema init error: {e}")
 
     def show(self, query: str) -> List:
         """Execute query and return results"""
@@ -89,6 +110,17 @@ class KuzuDB:
             return [r[0] if isinstance(r, (list, tuple)) else r.get('neighbor.link', '') for r in results]
         except Exception as e:
             print(f"Get neighbors error: {e}")
+            return []
+
+    def get_session_edges(self, session_id: str) -> List[tuple[str, str]]:
+        """Get all edges in a session"""
+        try:
+            session_safe = self._escape(session_id)
+            query = f"MATCH (a:links)-[r:hyprlink]->(b:links) WHERE r.session_id = '{session_safe}' RETURN a.link, b.link"
+            results = self.show(query)
+            return [(r[0], r[1]) for r in results]
+        except Exception as e:
+            print(f"Get session edges error: {e}")
             return []
 
     def get_session_nodes(self, session_id: str) -> List[str]:

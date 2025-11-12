@@ -1,2 +1,0 @@
-embeddings-model: nomic-embed-text:v1.5
-language-model : 'llama3.2:3b'

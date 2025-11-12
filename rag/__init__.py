@@ -1,8 +1,8 @@
-import ollama
+from ollama import Client
 from db.QdrantDB import QdrantDB
 from db.KuzuDB import KuzuDB
 from typing import List, Dict, Any, Optional
-import re
+import os
 
 try:
     import semchunk
@@ -19,7 +19,8 @@ class GraphRAG:
         language_model: str = 'llama3.2:3b',
         vector_size: int = 768,
         kuzu_db_path: str = "./kuzu_db",
-        qdrant_path: str = "./vector_db"
+        qdrant_path: str = "./vector_db",
+        ollama_host: str = None
     ):
         self.embedding_model = embedding_model
         self.language_model = language_model
@@ -27,6 +28,11 @@ class GraphRAG:
         self.graph_db = KuzuDB(kuzu_db_path)
         self.chunk_size = 256
         self.max_graph_depth = 2
+        
+        # Initialize Ollama client with proper host
+        if ollama_host is None:
+            ollama_host = os.getenv('OLLAMA_HOST', 'http://127.0.0.1:11434')
+        self.ollama_client = Client(host=ollama_host)
 
     def chunk_text(self, text: str) -> List[str]:
         """Chunk text using semantic chunking or fallback"""
@@ -35,10 +41,13 @@ class GraphRAG:
         
         try:
             if HAS_SEMCHUNK:
-                chunker = semchunk.chunkerify('gpt-4', self.chunk_size)
+                # Use a token-based chunker instead of model-based
+                # semchunk supports 'o200k_base' which is tiktoken's encoding
+                chunker = semchunk.chunkerify('o200k_base', self.chunk_size)
                 return chunker(text)
         except Exception as e:
-            print(f"Semchunk error: {e}, using fallback")
+            # Silently fall back to simple chunking
+            pass
         
         # Fallback: simple word-based chunking
         words = text.split()
@@ -63,23 +72,35 @@ class GraphRAG:
     def embed_text(self, text: str) -> List[float]:
         """Generate embeddings using Ollama"""
         try:
-            resp = ollama.embed(model=self.embedding_model, input=text)
-            return resp["embeddings"][0]
+            resp = self.ollama_client.embeddings(model=self.embedding_model, prompt=text)
+            # Ensure we have a valid embedding
+            embedding = resp.get("embedding")
+            if not embedding:
+                raise ValueError("No embedding returned from Ollama")
+            if not isinstance(embedding, list):
+                raise ValueError(f"Invalid embedding type: {type(embedding)}")
+            return embedding
         except Exception as e:
             print(f"Embedding error: {e}")
-            return [0.0] * 768  # Return zero vector on error
+            # Return zero vector on error with correct dimension based on model
+            return [0.0] * 768  # nomic-embed-text:v1.5 uses 768 dimensions
 
     def index_document(
         self,
         doc_id: str,
         url: str,
         content: str,
-        session_id: str
+        session_id: str,
+        parent_url: Optional[str] = None
     ) -> bool:
-        """Index a document into both vector and graph databases"""
+        """Index a document and optionally link it to a parent"""
         try:
             # Insert node into graph DB
             self.graph_db.insert_node(url, session_id)
+
+            # If a parent URL is provided, create a relationship
+            if parent_url:
+                self.link_documents(parent_url, url, session_id)
             
             # Chunk and embed content
             chunks = self.chunk_text(content)
@@ -240,7 +261,7 @@ Use the provided context from related documents to answer the user's query compr
 When citing information, reference the source documents when possible.
 If context is insufficient, acknowledge limitations and provide what you know."""
             
-            response = ollama.chat(
+            response = self.ollama_client.chat(
                 model=self.language_model,
                 messages=[
                     {'role': 'system', 'content': system_prompt},
@@ -248,7 +269,19 @@ If context is insufficient, acknowledge limitations and provide what you know.""
                 ]
             )
             
-            return response["message"]["content"]
+            # Ensure we have a valid response
+            if not response:
+                raise ValueError("No response from Ollama")
+            
+            message = response.get("message")
+            if not message:
+                raise ValueError("No message in Ollama response")
+            
+            content = message.get("content")
+            if not content:
+                raise ValueError("No content in message")
+            
+            return content
         
         except Exception as e:
             print(f"Generation error: {e}")
@@ -293,18 +326,27 @@ If context is insufficient, acknowledge limitations and provide what you know.""
             True if successful, False otherwise
         """
         try:
-            # Index all documents
-            for i, (url, content) in enumerate(documents.items()):
+            # Create a lookup for parent URLs for efficient linking
+            parent_map = {child: parent for parent, child in crawler_relations}
+
+            # Index all documents with progress
+            total = len(documents)
+            print(f"Indexing {total} documents and their relationships...")
+            for i, (url, content) in enumerate(documents.items(), 1):
                 doc_id = url.replace("https://", "").replace("http://", "").replace("/", "_")[:50]
-                success = self.index_document(doc_id, url, content, session_id)
+                parent_url = parent_map.get(url)
+                
+                success = self.index_document(doc_id, url, content, session_id, parent_url=parent_url)
+                
                 if not success:
                     print(f"Warning: Failed to index {url}")
-            
-            # Create graph links
-            for parent_url, child_url in crawler_relations:
-                self.link_documents(parent_url, child_url, session_id)
-            
-            print(f"Indexed {len(documents)} documents with {len(crawler_relations)} relationships")
+                else:
+                    if parent_url:
+                        print(f"  [{i}/{total}] Indexed and linked: {url} <- {parent_url}")
+                    else:
+                        print(f"  [{i}/{total}] Indexed: {url}")
+
+            print(f"✓ Indexed {len(documents)} documents and their relationships.")
             return True
         
         except Exception as e:

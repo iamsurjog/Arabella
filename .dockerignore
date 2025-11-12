@@ -1,0 +1,13 @@
+__pycache__/
+.git
+.gitignore
+.venv
+venv
+env
+build
+dist
+*.pyc
+*.pyo
+*.pyd
+sites.kuzu
+sites.kuzu.wal
