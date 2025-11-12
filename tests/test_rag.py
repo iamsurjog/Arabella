@@ -151,4 +151,3 @@ class TestGraphRAGIntegration:
             assert len(answer) > 0
         except Exception as e:
             pytest.skip(f"Full pipeline test skipped: {e}")
-

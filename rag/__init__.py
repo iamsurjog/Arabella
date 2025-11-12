@@ -90,12 +90,17 @@ class GraphRAG:
         doc_id: str,
         url: str,
         content: str,
-        session_id: str
+        session_id: str,
+        parent_url: Optional[str] = None
     ) -> bool:
-        """Index a document into both vector and graph databases"""
+        """Index a document and optionally link it to a parent"""
         try:
             # Insert node into graph DB
             self.graph_db.insert_node(url, session_id)
+
+            # If a parent URL is provided, create a relationship
+            if parent_url:
+                self.link_documents(parent_url, url, session_id)
             
             # Chunk and embed content
             chunks = self.chunk_text(content)
@@ -321,23 +326,27 @@ If context is insufficient, acknowledge limitations and provide what you know.""
             True if successful, False otherwise
         """
         try:
+            # Create a lookup for parent URLs for efficient linking
+            parent_map = {child: parent for parent, child in crawler_relations}
+
             # Index all documents with progress
             total = len(documents)
-            print(f"Indexing {total} documents...")
+            print(f"Indexing {total} documents and their relationships...")
             for i, (url, content) in enumerate(documents.items(), 1):
                 doc_id = url.replace("https://", "").replace("http://", "").replace("/", "_")[:50]
-                success = self.index_document(doc_id, url, content, session_id)
+                parent_url = parent_map.get(url)
+                
+                success = self.index_document(doc_id, url, content, session_id, parent_url=parent_url)
+                
                 if not success:
                     print(f"Warning: Failed to index {url}")
                 else:
-                    print(f"  [{i}/{total}] Indexed: {url}")
-            
-            # Create graph links
-            print(f"Creating {len(crawler_relations)} relationships...")
-            for parent_url, child_url in crawler_relations:
-                self.link_documents(parent_url, child_url, session_id)
-            
-            print(f"✓ Indexed {len(documents)} documents with {len(crawler_relations)} relationships")
+                    if parent_url:
+                        print(f"  [{i}/{total}] Indexed and linked: {url} <- {parent_url}")
+                    else:
+                        print(f"  [{i}/{total}] Indexed: {url}")
+
+            print(f"✓ Indexed {len(documents)} documents and their relationships.")
             return True
         
         except Exception as e:
